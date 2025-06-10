@@ -1,26 +1,54 @@
+version: '3.8'
+
 services:
+  postgis:
+    image: postgis/postgis:15-3.3
+    container_name: postgis-db
+    environment:
+      POSTGRES_DB: river_projects_db
+      POSTGRES_USER: geouser
+      POSTGRES_PASSWORD: sicherespasswort
+    ports:
+      - "5432:5432"
+    volumes:
+      # Daten bleiben auch nach Container-Neustart erhalten
+      - postgis_data:/var/lib/postgresql/data
+      # SQL-Datei wird beim ersten Start automatisch ausgeführt
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  # Backend API
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.server
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: river_projects_backend
     ports:
-      - "3000:3000"
-    volumes:
-      - ./backend:/app/backend
-      - ./package.json:/app/package.json
-      - ./package-lock.json:/app/package-lock.json
-      - /app/node_modules
+      - "3001:3001"
     environment:
-      - NODE_ENV=development
-    restart: always
+      DATABASE_URL: postgresql://geouser:sicherespasswort@postgis:5432/river_projects_db
+      PORT: 3001
+      NODE_ENV: development
+    depends_on:
+      # Backend wartet auf die Datenbank
+      - postgis
+    restart: unless-stopped
 
+  # Frontend
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.client
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: river_projects_frontend
     ports:
-      - "80:80"
-    volumes:
-      - ./frontend/public:/usr/share/nginx/html
+      - "3000:3000"
+    environment:
+      # API-URL für Frontend
+      REACT_APP_API_URL: http://localhost:3001
     depends_on:
+      # Frontend wartet auf das Backend
       - backend
+    restart: unless-stopped
+    
+volumes:
+  postgis_data:
