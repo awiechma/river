@@ -753,6 +753,108 @@ app.post('/api/init-db-simple', async (req, res) => {
   }
 });
 
+// Init-DB ohne PostGIS - nur mit Standard PostgreSQL
+app.post('/api/init-db-no-postgis', async (req, res) => {
+  try {
+    const { Client } = require('pg');
+    const client = new Client({
+      connectionString: process.env.DATABASE_URL
+    });
+    
+    await client.connect();
+    console.log('Connected to database');
+    
+    // Factor tables
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS issues (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ideas (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ecology_factors (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS socio_cultural_aspects (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS economic_factors (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS upgrading_approaches (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS governance_types (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) UNIQUE NOT NULL,
+          description TEXT
+      );
+    `);
+    
+    // Main projects table - OHNE PostGIS, nur mit latitude/longitude
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS river_projects (
+          id SERIAL PRIMARY KEY,
+          "case" VARCHAR(255) NOT NULL,
+          latitude FLOAT NOT NULL,
+          longitude FLOAT NOT NULL,
+          issue_ids INTEGER[] DEFAULT '{}',
+          idea_ids INTEGER[] DEFAULT '{}',
+          ecology_factor_ids INTEGER[] DEFAULT '{}',
+          socio_cultural_ids INTEGER[] DEFAULT '{}',
+          economic_factor_ids INTEGER[] DEFAULT '{}',
+          upgrading_ids INTEGER[] DEFAULT '{}',
+          governance_type_ids INTEGER[] DEFAULT '{}',
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    
+    // Standard indexes
+    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_lat_lng ON river_projects (latitude, longitude);');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_issues_gin ON river_projects USING GIN (issue_ids);');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_ideas_gin ON river_projects USING GIN (idea_ids);');
+    
+    console.log('All tables created successfully');
+    
+    await client.end();
+    
+    res.json({ message: 'Database tables created successfully (without PostGIS)!' });
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
